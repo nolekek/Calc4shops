@@ -30,6 +30,9 @@ htmlcov/
 *.html
 *.txt
 *.json
+*.js
+*.md
+!README.md
 !app/data/*.json
 !app/static/*.json
 
