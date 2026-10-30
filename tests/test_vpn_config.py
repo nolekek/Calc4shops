@@ -45,11 +45,10 @@ def test_generate_singbox_structure():
 
 
 def test_settings_proxy_resolution():
-    s1 = Settings(SOTA_VPN_KEY=None, TELEGRAM_PROXY_URL=None)
+    # Direct connection by default
+    s1 = Settings(TELEGRAM_PROXY_URL=None)
     assert s1.get_telegram_proxy() is None
 
-    s2 = Settings(SOTA_VPN_KEY="socks5://user:pass@1.2.3.4:1080")
-    assert s2.get_telegram_proxy() == "socks5://user:pass@1.2.3.4:1080"
-
-    s3 = Settings(SOTA_VPN_KEY="vless://test@1.1.1.1:443?security=none#test")
-    assert "1080" in s3.get_telegram_proxy()
+    # Custom proxy when specified
+    s2 = Settings(TELEGRAM_PROXY_URL="socks5://127.0.0.1:10808")
+    assert s2.get_telegram_proxy() == "socks5://127.0.0.1:10808"

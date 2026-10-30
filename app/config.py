@@ -32,16 +32,9 @@ class Settings(BaseSettings):
     )
 
     def get_telegram_proxy(self) -> Optional[str]:
-        """Возвращает адрес прокси ИСКЛЮЧИТЕЛЬНО для обращений к Telegram API."""
+        """Возвращает адрес прокси для обращений к Telegram API (если задан в TELEGRAM_PROXY_URL)."""
         if self.TELEGRAM_PROXY_URL:
             return self.TELEGRAM_PROXY_URL
-        if self.SOTA_VPN_KEY:
-            k = self.SOTA_VPN_KEY.strip()
-            if k.startswith("socks5://") or k.startswith("socks4://") or k.startswith("http://"):
-                return k
-            # Для VLESS / Shadowsocks трафик идёт через локальный контейнер-шлюз sing-box
-            import os
-            return os.environ.get("TUNNEL_PROXY_HOST", "socks5://127.0.0.1:1080")
         return None
 
 
