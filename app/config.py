@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     # Telegram bot configuration (optional for standalone browser testing)
     BOT_TOKEN: Optional[str] = None
     WEBAPP_URL: Optional[str] = None
+    
+    # VPN / Proxy for Telegram Bot API requests
+    SOTA_VPN_KEY: Optional[str] = None
+    TELEGRAM_PROXY_URL: Optional[str] = None
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./deals.db"
@@ -26,6 +30,19 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    def get_telegram_proxy(self) -> Optional[str]:
+        """Возвращает адрес прокси ИСКЛЮЧИТЕЛЬНО для обращений к Telegram API."""
+        if self.TELEGRAM_PROXY_URL:
+            return self.TELEGRAM_PROXY_URL
+        if self.SOTA_VPN_KEY:
+            k = self.SOTA_VPN_KEY.strip()
+            if k.startswith("socks5://") or k.startswith("socks4://") or k.startswith("http://"):
+                return k
+            # Для VLESS / Shadowsocks трафик идёт через локальный контейнер-шлюз sing-box
+            import os
+            return os.environ.get("TUNNEL_PROXY_HOST", "socks5://127.0.0.1:1080")
+        return None
 
 
 settings = Settings()

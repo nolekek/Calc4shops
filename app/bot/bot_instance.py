@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
@@ -16,8 +17,15 @@ dp: Optional[Dispatcher] = None
 def get_bot() -> Optional[Bot]:
     global bot
     if bot is None and settings.BOT_TOKEN:
+        proxy = settings.get_telegram_proxy()
+        session = None
+        if proxy:
+            logger.info(f"Telegram Bot using dedicated proxy/VPN tunnel: {proxy}")
+            session = AiohttpSession(proxy=proxy)
+
         bot = Bot(
             token=settings.BOT_TOKEN,
+            session=session,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
     return bot

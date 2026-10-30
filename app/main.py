@@ -32,6 +32,13 @@ async def lifespan(app: FastAPI):
     
     # Warm up rates cache
     asyncio.create_task(rates_service.get_rates(force_refresh=False))
+
+    # Initialize SotaVPN tunnel config if key provided
+    if settings.SOTA_VPN_KEY:
+        from app.core.vpn_config import generate_singbox_config_file
+        cfg_path = Path("data/singbox_config.json")
+        if generate_singbox_config_file(settings.SOTA_VPN_KEY, str(cfg_path)):
+            logger.info(f"SotaVPN sing-box tunnel config generated at {cfg_path}")
     
     # Start bot polling if BOT_TOKEN is configured
     global bot_task
