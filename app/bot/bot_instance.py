@@ -45,12 +45,15 @@ async def start_bot_polling():
         logger.warning("No BOT_TOKEN found. Bot polling not started.")
         return
     d = get_dispatcher()
-    logger.info("Bot starting polling...")
+    logger.info("Bot checking connection to Telegram API...")
     try:
+        me = await b.get_me()
+        logger.info(f"Bot authorized successfully: @{me.username} (id={me.id})")
         await b.delete_webhook(drop_pending_updates=True)
+        logger.info("Bot starting polling updates...")
         await d.start_polling(b)
     except Exception as e:
-        logger.error(f"Error in bot polling: {e}")
+        logger.error(f"Fatal error in bot polling: {e}", exc_info=True)
 
 
 async def stop_bot_polling():

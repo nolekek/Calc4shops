@@ -6,15 +6,15 @@ services:
     container_name: deal_auditor_prod
     user: root
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "24500:8000"
     environment:
       - HOST=0.0.0.0
       - PORT=8000
       - DEBUG=False
-      - BOT_TOKEN=${BOT_TOKEN:-}
-      - WEBAPP_URL=${WEBAPP_URL:-https://kolbaska.delyoself.site}
-      - TELEGRAM_PROXY_URL=${TELEGRAM_PROXY_URL:-}
+      - WEBAPP_URL=https://kolbaska.delyoself.site
       - DATABASE_URL=sqlite+aiosqlite:////app/data/deals.db
     volumes:
       - ./data:/app/data

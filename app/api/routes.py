@@ -29,6 +29,8 @@ from app.core.subscription import (
     activate_subscription_key,
     _get_utc_now,
 )
+from app.config import settings
+import httpx
 from fastapi import UploadFile, File
 from fastapi.responses import Response
 
@@ -310,4 +312,60 @@ async def activate_subscription_key_endpoint(
         "message": message,
         "expires_at": new_expires.isoformat() if new_expires else None
     }
+
+
+@router.get("/system/status")
+async def get_system_status(db: AsyncSession = Depends(get_db)):
+    """Диагностика состояния системы, токена бота и доступности Telegram API."""
+    token_set = bool(settings.BOT_TOKEN)
+    masked_token = (
+        f"{settings.BOT_TOKEN[:6]}...{settings.BOT_TOKEN[-4:]}"
+        if token_set and len(settings.BOT_TOKEN) > 10
+        else (settings.BOT_TOKEN if token_set else None)
+    )
+
+    telegram_api_reachable = False
+    telegram_api_error = None
+    bot_info = None
+
+    proxy = settings.get_telegram_proxy()
+    transport = None
+
+    try:
+        async with httpx.AsyncClient(proxy=proxy, timeout=5.0) as client:
+            if token_set:
+                r = await client.get(f"https://api.telegram.org/bot{settings.BOT_TOKEN}/getMe")
+                if r.status_code == 200:
+                    telegram_api_reachable = True
+                    bot_info = r.json().get("result", {})
+                else:
+                    telegram_api_error = f"HTTP {r.status_code}: {r.text[:120]}"
+            else:
+                r = await client.get("https://api.telegram.org")
+                telegram_api_reachable = r.status_code in (200, 302, 404)
+    except Exception as e:
+        telegram_api_error = str(e)
+
+    # Check DB
+    db_ok = False
+    try:
+        await db.execute(select(UserSetting).limit(1))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    return {
+        "status": "ok",
+        "bot_token_configured": token_set,
+        "bot_token_masked": masked_token,
+        "bot_authorized": bot_info is not None,
+        "bot_info": bot_info,
+        "telegram_api_reachable": telegram_api_reachable,
+        "telegram_api_error": telegram_api_error,
+        "proxy_configured": bool(proxy),
+        "proxy_url": proxy,
+        "webapp_url": settings.WEBAPP_URL,
+        "database_connected": db_ok,
+    }
+
 
