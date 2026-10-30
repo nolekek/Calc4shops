@@ -1,0 +1,23 @@
+services:
+  deal-auditor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deal_auditor_prod
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=False
+      - BOT_TOKEN=${BOT_TOKEN:-}
+      - WEBAPP_URL=${WEBAPP_URL:-http://localhost:8000}
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/deals.db
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/presets\").read()'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
