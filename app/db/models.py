@@ -9,7 +9,29 @@ class Base(DeclarativeBase):
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class UserSubscription(Base):
+    __tablename__ = "user_subscriptions"
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), default="trial")  # trial, active, expired, lifetime
+    expires_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    plan_name: Mapped[str] = mapped_column(String(64), default="monthly")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class ActivationKey(Base):
+    __tablename__ = "activation_keys"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    duration_days: Mapped[int] = mapped_column(Integer, default=30)
+    is_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    used_by_user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class UserSetting(Base):

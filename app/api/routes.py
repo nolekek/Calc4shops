@@ -24,6 +24,11 @@ from app.core.batch_processor import (
     BatchItemResult,
     SAMPLE_BATCH_ROWS,
 )
+from app.core.subscription import (
+    check_subscription_active,
+    activate_subscription_key,
+    _get_utc_now,
+)
 from fastapi import UploadFile, File
 from fastapi.responses import Response
 
@@ -255,4 +260,54 @@ async def export_batch_csv(items: List[BatchItemResult]):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=deal_auditor_report.csv"}
     )
+
+
+class SubscriptionStatusDTO(BaseModel):
+    user_id: str
+    active: bool
+    status: str
+    plan_name: str
+    expires_at: Optional[str]
+    days_left: int
+
+
+class ActivateKeyRequest(BaseModel):
+    user_id: str
+    key: str
+
+
+@router.get("/subscription/status", response_model=SubscriptionStatusDTO)
+async def get_subscription_status_endpoint(
+    user_id: str = Query(..., description="Telegram ID пользователя"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Возвращает статус активности подписки и количество оставшихся дней."""
+    is_active, sub = await check_subscription_active(db, user_id)
+    now = _get_utc_now()
+    days_left = max(0, (sub.expires_at - now).days) if sub.expires_at else 0
+    return SubscriptionStatusDTO(
+        user_id=user_id,
+        active=is_active,
+        status=sub.status,
+        plan_name=sub.plan_name,
+        expires_at=sub.expires_at.isoformat() if sub.expires_at else None,
+        days_left=days_left
+    )
+
+
+@router.post("/subscription/activate")
+async def activate_subscription_key_endpoint(
+    payload: ActivateKeyRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Активация разового промокода/ключа подписки."""
+    success, message, new_expires = await activate_subscription_key(db, payload.user_id, payload.key)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {
+        "success": True,
+        "message": message,
+        "expires_at": new_expires.isoformat() if new_expires else None
+    }
 

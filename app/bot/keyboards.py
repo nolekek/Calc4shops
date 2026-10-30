@@ -24,6 +24,7 @@ def get_main_reply_keyboard(webapp_url: str | None = None) -> ReplyKeyboardMarku
             KeyboardButton(text="📁 Массовый расчёт (CSV)")
         ],
         [
+            KeyboardButton(text="💎 Подписка"),
             KeyboardButton(text="📊 Моя история"),
             KeyboardButton(text="⚙️ Настройки")
         ]
@@ -47,8 +48,21 @@ def get_start_inline_keyboard(webapp_url: str | None = None) -> InlineKeyboardMa
             )
         ],
         [
+            InlineKeyboardButton(text="💎 Подписка", callback_data="btn_sub"),
             InlineKeyboardButton(text="📊 История", callback_data="btn_history"),
+        ],
+        [
             InlineKeyboardButton(text="⚙️ Пресеты", callback_data="btn_settings"),
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_sub_inline_keyboard() -> InlineKeyboardMarkup:
+    """Кнопки в меню управления подпиской."""
+    buttons = [
+        [
+            InlineKeyboardButton(text="🔑 Как активировать ключ?", callback_data="btn_sub_help")
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)

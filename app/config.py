@@ -22,14 +22,22 @@ class Settings(BaseSettings):
     CBR_API_URL: str = "https://www.cbr-xml-daily.ru/daily_json.js"
     RATES_CACHE_TTL_SECONDS: int = 3600
 
-    # Default business settings
+    # Business & Subscription settings
     DEFAULT_TARGET_MARGIN_PCT: float = 20.0
+    TRIAL_DAYS: int = 3
+    ADMIN_IDS: str = ""  # Comma-separated Telegram user IDs
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    def get_admin_ids(self) -> set[str]:
+        """Возвращает множество ID администраторов."""
+        if not self.ADMIN_IDS:
+            return set()
+        return {x.strip() for x in self.ADMIN_IDS.split(",") if x.strip()}
 
     def get_telegram_proxy(self) -> Optional[str]:
         """Возвращает адрес прокси для обращений к Telegram API (если задан в TELEGRAM_PROXY_URL)."""

@@ -22,6 +22,14 @@ from app.bot.keyboards import (
     get_main_reply_keyboard,
     get_start_inline_keyboard,
     get_platforms_inline_keyboard,
+    get_sub_inline_keyboard,
+)
+from app.core.subscription import (
+    check_subscription_active,
+    activate_subscription_key,
+    generate_activation_keys,
+    grant_subscription_manual,
+    _get_utc_now,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,6 +68,23 @@ def format_deal_message(res, platform_name: str, currency: str, cost_orig: float
 @router.message(CommandStart())
 async def handle_start(message: Message):
     user_name = message.from_user.first_name if message.from_user else "Продавец"
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+
+    async with async_session() as db:
+        is_active, sub = await check_subscription_active(db, user_id)
+
+    now = _get_utc_now()
+    if sub.status == "admin":
+        sub_status_text = "👑 <b>Статус:</b> Администратор (бессрочный доступ)"
+    elif sub.status == "trial":
+        days_left = max(0, (sub.expires_at - now).days + 1)
+        sub_status_text = f"🎁 <b>Пробный доступ:</b> активен (осталось {days_left} дн.)"
+    elif is_active:
+        days_left = max(0, (sub.expires_at - now).days)
+        sub_status_text = f"💎 <b>Подписка:</b> активна до {sub.expires_at.strftime('%d.%m.%Y')} ({days_left} дн.)"
+    else:
+        sub_status_text = "🔒 <b>Подписка:</b> не активна (активируйте ключ: <code>/activate КЛЮЧ</code>)"
+
     text = (
         f"👋 Привет, <b>{user_name}</b>!\n\n"
         f"Я <b>«Аудитор сделок»</b> — твой персональный финансовый калькулятор для продаж цифровых товаров на "
@@ -69,6 +94,7 @@ async def handle_start(message: Message):
         f"• Автоматически пересчитывать <b>закупки в TRY, USDT, USD, KZT</b> по курсу.\n"
         f"• Находить <b>точку безубыточности</b> и максимальную безопасную скидку.\n"
         f"• Подбирать цену лота под желаемую прибыль.\n\n"
+        f"{sub_status_text}\n\n"
         f"👇 <i>Нажми кнопку ниже, чтобы открыть калькулятор на весь экран:</i>"
     )
     await message.answer(
@@ -102,6 +128,19 @@ async def handle_help(message: Message):
 @router.message(Command("calc"))
 @router.message(F.text == "⚡ Быстрый расчет")
 async def handle_calc_command(message: Message):
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+    async with async_session() as db:
+        is_active, _ = await check_subscription_active(db, user_id)
+    if not is_active:
+        await message.answer(
+            "🔒 <b>Доступ ограничен по подписке</b>\n\n"
+            "Срок вашей подписки или пробного периода истёк.\n"
+            "Продлите доступ на <b>Playerok</b> и активируйте полученный ключ:\n"
+            "<code>/activate ВАШ_КЛЮЧ</code>\n\n"
+            "💎 <i>Узнать статус: /sub</i>"
+        )
+        return
+
     # Check if arguments provided
     text_content = message.text.strip()
     parts = text_content.split()
@@ -237,6 +276,19 @@ async def handle_settings(message: Message):
 @router.message(Command("batch"))
 @router.message(F.text == "📁 Массовый расчёт (CSV)")
 async def handle_batch_command(message: Message):
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+    async with async_session() as db:
+        is_active, _ = await check_subscription_active(db, user_id)
+    if not is_active:
+        await message.answer(
+            "🔒 <b>Доступ ограничен по подписке</b>\n\n"
+            "Массовый аудит прайс-листов доступен только пользователям с активной подпиской.\n"
+            "Активируйте ключ доступа:\n"
+            "<code>/activate ВАШ_КЛЮЧ</code>\n\n"
+            "💎 <i>Узнать статус: /sub</i>"
+        )
+        return
+
     text = (
         "📁 <b>Массовый расчёт лотов из CSV</b>\n\n"
         "Вы можете отправить боту файл <b>.csv</b> со списком ваших товаров, и я мгновенно рассчитаю маржинальность всего прайс-листа!\n\n"
@@ -254,6 +306,19 @@ async def handle_batch_command(message: Message):
 
 @router.message(F.document)
 async def handle_csv_document(message: Message):
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+    async with async_session() as db:
+        is_active, _ = await check_subscription_active(db, user_id)
+    if not is_active:
+        await message.answer(
+            "🔒 <b>Доступ ограничен по подписке</b>\n\n"
+            "Пакетный анализ файлов CSV доступен только по активной подписке.\n"
+            "Активируйте ключ доступа:\n"
+            "<code>/activate ВАШ_КЛЮЧ</code>\n\n"
+            "💎 <i>Узнать статус: /sub</i>"
+        )
+        return
+
     doc = message.document
     if not doc or not doc.file_name or not doc.file_name.lower().endswith(".csv"):
         await message.answer("⚠️ Пожалуйста, отправьте файл в формате <b>.csv</b>.")
@@ -340,3 +405,141 @@ async def callback_settings(query: CallbackQuery):
     await query.answer()
     if query.message:
         await handle_settings(query.message)
+
+
+@router.message(Command("sub"))
+@router.message(Command("subscription"))
+@router.message(F.text == "💎 Подписка")
+async def handle_subscription_info(message: Message):
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+    async with async_session() as db:
+        is_active, sub = await check_subscription_active(db, user_id)
+
+    now = _get_utc_now()
+    if sub.status == "admin":
+        msg = (
+            "👑 <b>Управление подпиской</b>\n━━━━━━━━━━━━━━━━━━\n"
+            "Статус: <b>Администратор системы</b>\n"
+            "Доступ: <b>Бессрочный / Неограниченный</b>\n\n"
+            "🛠️ <b>Команды администратора:</b>\n"
+            "• <code>/genkey [кол-во] [дней]</code> — сгенерировать ключи для Playerok\n"
+            "• <code>/grant [telegram_id] [дней]</code> — выдать подписку пользователю вручную"
+        )
+    elif is_active:
+        days_left = max(0, (sub.expires_at - now).days)
+        tag = "🎁 <b>Пробный доступ:</b>" if sub.status == "trial" else "💎 <b>Активная подписка:</b>"
+        msg = (
+            f"{tag}\n━━━━━━━━━━━━━━━━━━\n"
+            f"• Статус: <b>Активна ✅</b>\n"
+            f"• Действует до: <b>{sub.expires_at.strftime('%d.%m.%Y %H:%M UTC')}</b>\n"
+            f"• Осталось: <b>{days_left} дн.</b>\n\n"
+            f"💡 Для продления приобретите ключ на Playerok и введите:\n"
+            f"<code>/activate ВАШ_КЛЮЧ</code>"
+        )
+    else:
+        msg = (
+            "❌ <b>Подписка неактивна</b>\n━━━━━━━━━━━━━━━━━━\n"
+            "Срок действия вашего доступа истёк.\n\n"
+            "🛒 <b>Как получить доступ:</b>\n"
+            "1. Приобретите ключ подписки на 30 дней на <b>Playerok</b>.\n"
+            "2. Отправьте полученный ключ сюда командой:\n"
+            "<code>/activate ВАШ_КЛЮЧ</code>\n\n"
+            "После активации вам мгновенно откроется полный доступ к калькулятору и пакетному анализу CSV."
+        )
+
+    await message.answer(msg, reply_markup=get_sub_inline_keyboard())
+
+
+@router.message(Command("activate"))
+async def handle_activate_key(message: Message):
+    parts = message.text.strip().split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer(
+            "🔑 <b>Активация подписки</b>\n\n"
+            "Пожалуйста, укажите ключ после команды, например:\n"
+            "<code>/activate AUDIT-XXXX-XXXX-XXXX</code>"
+        )
+        return
+
+    key_input = parts[1].strip()
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+
+    async with async_session() as db:
+        success, text, new_expires = await activate_subscription_key(db, user_id, key_input)
+
+    if success and new_expires:
+        text += f"\n\n📅 Подписка активна до: <b>{new_expires.strftime('%d.%m.%Y %H:%M UTC')}</b>"
+
+    await message.answer(text)
+
+
+@router.message(Command("genkey"))
+async def handle_genkey(message: Message):
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+    if user_id not in settings.get_admin_ids():
+        await message.answer("⛔ Данная команда доступна только администраторам.")
+        return
+
+    parts = message.text.strip().split()
+    count = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 1
+    days = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 30
+
+    if count > 100:
+        count = 100
+
+    async with async_session() as db:
+        keys = await generate_activation_keys(db, count=count, duration_days=days)
+
+    keys_str = "\n".join(keys)
+    reply_text = (
+        f"🔑 <b>Сгенерировано {len(keys)} ключей на {days} дней:</b>\n\n"
+        f"<code>{keys_str}</code>\n\n"
+        f"📋 <i>Скопируйте их в раздел «Автоматическая выдача» на Playerok.</i>"
+    )
+    await message.answer(reply_text)
+
+
+@router.message(Command("grant"))
+async def handle_grant(message: Message):
+    user_id = str(message.from_user.id) if message.from_user else "anon"
+    if user_id not in settings.get_admin_ids():
+        await message.answer("⛔ Данная команда доступна только администраторам.")
+        return
+
+    parts = message.text.strip().split()
+    if len(parts) < 2:
+        await message.answer("Использование: <code>/grant [user_id] [days]</code>")
+        return
+
+    target_user_id = parts[1]
+    days = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 30
+
+    async with async_session() as db:
+        sub = await grant_subscription_manual(db, target_user_id, days=days)
+
+    await message.answer(
+        f"✅ Пользователю <code>{target_user_id}</code> начислено {days} дней подписки.\n"
+        f"Срок действия: <b>{sub.expires_at.strftime('%d.%m.%Y %H:%M UTC')}</b>"
+    )
+
+
+@router.callback_query(F.data == "btn_sub")
+async def callback_sub(query: CallbackQuery):
+    await query.answer()
+    if query.message:
+        await handle_subscription_info(query.message)
+
+
+@router.callback_query(F.data == "btn_sub_help")
+async def callback_sub_help(query: CallbackQuery):
+    await query.answer()
+    if query.message:
+        await query.message.answer(
+            "📖 <b>Как активировать подписку:</b>\n\n"
+            "1. Купите товар на Playerok.\n"
+            "2. В чате заказа или автовыдаче вы получите ключ формата:\n"
+            "   <code>AUDIT-XXXX-XXXX-XXXX</code>\n"
+            "3. Скопируйте ключ и отправьте его сюда сообщением:\n"
+            "   <code>/activate ВАШ_КЛЮЧ</code>\n\n"
+            "Бот мгновенно продлит ваш доступ на 30 дней!"
+        )
