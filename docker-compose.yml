@@ -6,10 +6,10 @@ services:
     container_name: deal_auditor_prod
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${PORT:-24500}:${PORT:-24500}"
     environment:
       - HOST=0.0.0.0
-      - PORT=8000
+      - PORT=${PORT:-24500}
       - DEBUG=False
       - BOT_TOKEN=${BOT_TOKEN:-}
       - WEBAPP_URL=${WEBAPP_URL:-http://localhost:8000}
