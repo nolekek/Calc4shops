@@ -4,15 +4,16 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: deal_auditor_prod
+    user: root
     restart: unless-stopped
     ports:
-      - "${PORT:-24500}:${PORT:-24500}"
+      - "24500:8000"
     environment:
       - HOST=0.0.0.0
-      - PORT=${PORT:-24500}
+      - PORT=8000
       - DEBUG=False
       - BOT_TOKEN=${BOT_TOKEN:-}
-      - WEBAPP_URL=${WEBAPP_URL:-http://localhost:8000}
+      - WEBAPP_URL=${WEBAPP_URL:-https://kolbaska.delyoself.site}
       - TELEGRAM_PROXY_URL=${TELEGRAM_PROXY_URL:-}
       - DATABASE_URL=sqlite+aiosqlite:////app/data/deals.db
     volumes:

@@ -29,10 +29,10 @@ COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser .env.example .env
 
 # Data directory for SQLite database
-RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+RUN mkdir -p /app/data && chmod -R 777 /app/data
 ENV DATABASE_URL="sqlite+aiosqlite:////app/data/deals.db"
 
-USER appuser
+USER root
 
 EXPOSE 8000
 

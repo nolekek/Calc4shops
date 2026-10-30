@@ -26,6 +26,13 @@ htmlcov/
 # Logs
 *.log
 
+# Scratch research files
+*.html
+*.txt
+*.json
+!app/data/*.json
+!app/static/*.json
+
 # OS & IDE
 .vscode/
 .idea/
